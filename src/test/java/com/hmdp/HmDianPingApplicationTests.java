@@ -14,15 +14,18 @@ import com.hmdp.utils.SystemConstants;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.geo.Point;
+import org.springframework.data.redis.connection.ClusterSlotHashUtil;
+import org.springframework.data.redis.connection.RedisGeoCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import javax.annotation.Resource;
 import java.io.*;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 
 @SpringBootTest
@@ -90,5 +93,39 @@ class HmDianPingApplicationTests {
         }
         reader.close();
         t.close();
+    }
+
+    /**
+     * <p>
+     *     导入店铺坐标到redis
+     * </p>
+     */
+    @Test
+    void testShopLocation() {
+        // 获取数据库中的所有店铺
+        List<Shop> shops = shopService.list();
+
+        // 根据店铺类型对店铺进行分类，将同类型的店铺放在一起
+        Map<Long, List<Shop>> collect = shops.stream().collect(Collectors.groupingBy(Shop::getTypeId));
+
+        for(Map.Entry<Long, List<Shop>> entity : collect.entrySet()) {
+            String key = RedisConstants.SHOP_GEO_KEY + entity.getKey();
+            Iterable<RedisGeoCommands.GeoLocation<String>> geoLocation = entity
+                    .getValue().
+                    stream().
+                    map(
+                            shop->new RedisGeoCommands.GeoLocation<>(shop.getId().toString(), new Point(shop.getX(),shop.getY()))
+                    ).collect(Collectors.toList());
+            stringRedisTemplate.opsForGeo().add(key,geoLocation);
+        }
+    }
+
+    @Test
+    void name() {
+        System.out.println(ClusterSlotHashUtil.calculateSlot("name"));
+        System.out.println(ClusterSlotHashUtil.calculateSlot("sex"));
+        System.out.println(ClusterSlotHashUtil.calculateSlot("hello"));
+        System.out.println(ClusterSlotHashUtil.calculateSlot("name"));
+
     }
 }
